@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wasmer_runtime::Module;
+use wasmer::Module;
 
 #[derive(Default)]
 pub struct KernelStore {

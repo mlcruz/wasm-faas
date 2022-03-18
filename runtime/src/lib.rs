@@ -11,7 +11,7 @@ pub struct NamedFunction {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WasmFunction {
     pub name: String,
-    pub args: Vec<wasmer_runtime::Value>,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
