@@ -7,13 +7,13 @@ use std::{
 use parking_lot::Mutex;
 use wasmer::{Instance, Module, Store};
 use wasmer_wasi::{WasiEnv, WasiStateBuilder};
-use wasmfass::{kernel_store::KernelStore, Command, NamedFunction};
+use wasmfass::{module_store::ModuleStore, Command, NamedFunction};
 
 fn main() {
     let addr = SocketAddr::new(IpAddr::V4("0.0.0.0".parse().unwrap()), 9999);
     let sock = std::net::TcpListener::bind(addr).unwrap();
 
-    let kernel_store = Arc::new(Mutex::new(KernelStore::default()));
+    let kernel_store = Arc::new(Mutex::new(ModuleStore::default()));
     let wasm_store = Arc::new(Store::default());
 
     sock.incoming().for_each(|s| {
@@ -24,13 +24,13 @@ fn main() {
     });
 }
 
-fn handle_stream(stream: TcpStream, kernel_store: Arc<Mutex<KernelStore>>, wasm_store: Arc<Store>) {
+fn handle_stream(stream: TcpStream, kernel_store: Arc<Mutex<ModuleStore>>, wasm_store: Arc<Store>) {
     handle_stream_inner(stream, kernel_store, wasm_store).unwrap();
 }
 
 fn handle_stream_inner(
     mut stream: TcpStream,
-    kernel_store: Arc<Mutex<KernelStore>>,
+    kernel_store: Arc<Mutex<ModuleStore>>,
     wasm_store: Arc<Store>,
 ) -> anyhow::Result<()> {
     let mut stream_reader = BufReader::new(stream.try_clone()?);
@@ -62,7 +62,7 @@ fn handle_stream_inner(
 }
 
 fn execute_function(
-    kernel_store: &Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, KernelStore>>,
+    kernel_store: &Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, ModuleStore>>,
     function: wasmfass::ExecuteFunction,
     stream: &mut TcpStream,
 ) -> Result<(), anyhow::Error> {
@@ -87,7 +87,7 @@ fn execute_function(
 
 fn register_function(
     named_function: NamedFunction,
-    kernel_store: &Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, KernelStore>>,
+    kernel_store: &Arc<parking_lot::lock_api::Mutex<parking_lot::RawMutex, ModuleStore>>,
     wasm_store: &Store,
 ) -> Result<(), anyhow::Error> {
     let data = base64::decode(named_function.data_base64)?;

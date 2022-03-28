@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use wasmer::Module;
 
 #[derive(Default)]
-pub struct KernelStore {
+pub struct ModuleStore {
     store: HashMap<String, Module>,
 }
 
-impl KernelStore {
+impl ModuleStore {
     pub fn new() -> Self {
         Self::default()
     }

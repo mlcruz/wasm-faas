@@ -1,6 +1,18 @@
-use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
-pub mod kernel_store;
+use module_store::ModuleStore;
+use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+use wasmer::Store;
+
+pub mod module_store;
+pub mod routes;
+
+#[derive(Clone)]
+pub struct ServerState {
+    pub module_store: Arc<Mutex<ModuleStore>>,
+    pub wasm_store: Arc<Store>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NamedFunction {
