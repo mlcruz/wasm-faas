@@ -1,0 +1,17 @@
+{
+  "moduleName": "sum",
+  "function": {
+    "name": "sum",
+    "args": [
+      {
+        "value": "10",
+        "argType": "I32"
+      },
+      {
+        "value": "10",
+        "argType": "I32"
+      }
+    ]
+  },
+  "wasi": false
+}

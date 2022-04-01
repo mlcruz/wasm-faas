@@ -3,7 +3,7 @@ use std::sync::Arc;
 use module_store::ModuleStore;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use wasmer::Store;
+use wasmer::{Module, Store};
 
 pub mod module_store;
 pub mod routes;
@@ -36,6 +36,10 @@ pub struct ExecuteFunction {
 pub enum Command {
     RegisterFunction(NamedFunction),
     ExecuteFunction(ExecuteFunction),
+}
+
+pub fn compile_wasm(store: &Store, data: &[u8]) -> Result<Module, wasmer::CompileError> {
+    Module::new(store, data)
 }
 
 #[cfg(test)]

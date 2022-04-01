@@ -1,8 +1,7 @@
 use axum::{extract::Extension, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
-use wasmer::{Module, Store};
 
-use crate::ServerState;
+use crate::{compile_wasm, ServerState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterFunction {
@@ -28,8 +27,4 @@ pub async fn register_function_handler(
 
     module_store.add(payload.name, module);
     Ok("OK")
-}
-
-fn compile_wasm(store: &Store, data: &[u8]) -> Result<Module, wasmer::CompileError> {
-    Module::new(store, data)
 }

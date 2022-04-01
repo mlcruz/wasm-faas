@@ -1,0 +1,1 @@
+emcc ./cpp/sum/sum.c -O3 -o sum.wasm --no-entry 
