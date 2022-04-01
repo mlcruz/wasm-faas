@@ -30,15 +30,30 @@ pub struct ExecuteModule {
     pub wasi: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WasmResult {
+    result: String,
+    result_type: wasmer::ValType,
+}
+
 pub async fn execute_function(
     Extension(state): Extension<ServerState>,
     Json(payload): Json<ExecuteModule>,
-) -> Result<(), (StatusCode, String)> {
-    execute_function_inner(state.module_store.clone(), payload)
+) -> Result<Json<Vec<WasmResult>>, (StatusCode, String)> {
+    let result = execute_function_inner(state.module_store.clone(), payload)
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, String::from(format!("{:?}", e))))?;
 
-    todo!()
+    let result = result
+        .into_iter()
+        .map(|v| WasmResult {
+            result_type: v.ty(),
+            result: v.to_string(),
+        })
+        .collect::<Vec<_>>();
+
+    Ok(result.into())
 }
 
 async fn execute_function_inner(

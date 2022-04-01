@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use axum::{extract::Extension, routing::post, Router};
 use tokio::sync::Mutex;
@@ -15,10 +15,12 @@ async fn main() {
 
     let module_store = Arc::new(Mutex::new(ModuleStore::default()));
     let wasm_store = Arc::new(Store::default());
+    let known_nodes = Arc::new(Mutex::new(HashMap::default()));
 
     let server_state = ServerState {
         module_store,
         wasm_store,
+        known_nodes,
     };
 
     let app = Router::new()
@@ -26,7 +28,7 @@ async fn main() {
         .layer(Extension(server_state));
 
     axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<SocketAddr, _>())
         .await
         .unwrap();
 }

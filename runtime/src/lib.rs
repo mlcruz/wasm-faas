@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
+use chrono::NaiveDateTime;
 use module_store::ModuleStore;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -12,6 +13,7 @@ pub mod routes;
 pub struct ServerState {
     pub module_store: Arc<Mutex<ModuleStore>>,
     pub wasm_store: Arc<Store>,
+    pub known_nodes: Arc<Mutex<HashMap<SocketAddr, NaiveDateTime>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
