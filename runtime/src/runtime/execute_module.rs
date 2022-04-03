@@ -182,7 +182,7 @@ mod tests {
         let payload = ExecuteModuleRequest {
             module_name: "import".into(),
             function: WasmFunction {
-                name: "import".into(),
+                name: "div_sum".into(),
                 args: vec![
                     WasmArg {
                         value: "10".into(),
@@ -194,14 +194,9 @@ mod tests {
                     },
                 ],
             },
-            imports: vec![
-                WasmImport {
-                    module_name: "sum".to_string(),
-                },
-                WasmImport {
-                    module_name: "div".to_string(),
-                },
-            ],
+            imports: vec![WasmImport {
+                module_name: "sum".to_string(),
+            }],
             wasi: false,
         };
 
