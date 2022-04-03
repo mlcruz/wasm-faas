@@ -24,7 +24,6 @@ pub struct WasmFunction {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WasmImport {
-    pub symbol_name: String,
     pub module_name: String,
 }
 
@@ -47,16 +46,9 @@ pub struct WasmResult {
 async fn execute_function(
     module: &Module,
     payload: ExecuteModuleRequest,
+    store: ModuleStore,
 ) -> anyhow::Result<Box<[wasmer::Value]>> {
-    let module_imports = if payload.wasi {
-        let wasi_state = WasiStateBuilder::default().build()?;
-        let mut wasi_env = WasiEnv::new(wasi_state);
-        let imports = wasi_env.import_object(&module)?;
-        imports
-    } else {
-        let imports = imports! {};
-        imports
-    };
+    let module_imports = resolve_imports(module, &payload, store).await?;
 
     let instance = Instance::new(&module, &module_imports)?;
 
@@ -77,7 +69,7 @@ async fn execute_function(
 async fn resolve_imports(
     module: &Module,
     payload: &ExecuteModuleRequest,
-    store: Arc<Mutex<ModuleStore>>,
+    store: ModuleStore,
 ) -> anyhow::Result<ImportObject> {
     let mut base_imports = if payload.wasi {
         let wasi_state = WasiStateBuilder::default().build()?;
@@ -92,8 +84,6 @@ async fn resolve_imports(
     let empty_imports = imports! {};
 
     for meta in &payload.imports {
-        let store = store.lock();
-
         if let Some(module) = store.get(&meta.module_name) {
             let instance = Instance::new(&module, &empty_imports)?;
             base_imports.register(&meta.module_name, instance.exports);
@@ -128,6 +118,8 @@ mod tests {
         runtime::execute_module::{execute_function, ExecuteModuleRequest, WasmArg, WasmFunction},
     };
 
+    use super::{resolve_imports, WasmImport};
+
     static WASM_SUM: &[u8] = include_bytes!(r#"../../../binaries/compiled/sum.wasm"#);
     static WASM_DIV: &[u8] = include_bytes!(r#"../../../binaries/compiled/div.wasm"#);
     static WASM_IMPORT: &[u8] = include_bytes!(r#"../../../binaries/compiled/import.wasm"#);
@@ -139,12 +131,7 @@ mod tests {
         let mut module_store = ModuleStore::default();
         let wasm_store = Store::default();
         let wasm_add_one = compile_wasm(&wasm_store, WASM_SUM)?;
-        let wasm_div = compile_wasm(&wasm_store, WASM_DIV)?;
-        let wasm_import = compile_wasm(&wasm_store, WASM_IMPORT)?;
-
         module_store.add("sum", wasm_add_one);
-        module_store.add("div", wasm_div);
-        module_store.add("import", wasm_import);
 
         let module_store = module_store;
         let payload = ExecuteModuleRequest {
@@ -166,15 +153,67 @@ mod tests {
             wasi: false,
         };
 
-        let module = module_store.get("sum").unwrap();
+        let module = module_store.get("sum").unwrap().clone();
 
         let json = serde_json::to_string_pretty(&payload)?;
         println!("{}", json);
-        let result = runtime.block_on(execute_function(module, payload))?;
+        let result = runtime.block_on(execute_function(&module, payload, module_store))?;
         println!("{:#?}", result);
         std::fs::write("tests/data/sum_request.json", json)?;
         let result = &result[0].i32().unwrap();
         assert_eq!(*result, 20);
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_imports() -> anyhow::Result<()> {
+        let runtime = tokio::runtime::Builder::new_current_thread().build()?;
+        let mut module_store = ModuleStore::default();
+        let wasm_store = Store::default();
+        let wasm_add_one = compile_wasm(&wasm_store, WASM_SUM)?;
+        let wasm_div = compile_wasm(&wasm_store, WASM_DIV)?;
+        let wasm_import = compile_wasm(&wasm_store, WASM_IMPORT)?;
+
+        module_store.add("sum", wasm_add_one);
+        module_store.add("div", wasm_div);
+        module_store.add("import", wasm_import);
+
+        let module_store = module_store;
+        let payload = ExecuteModuleRequest {
+            module_name: "import".into(),
+            function: WasmFunction {
+                name: "import".into(),
+                args: vec![
+                    WasmArg {
+                        value: "10".into(),
+                        arg_type: wasmer::ValType::I32,
+                    },
+                    WasmArg {
+                        value: "10".into(),
+                        arg_type: wasmer::ValType::I32,
+                    },
+                ],
+            },
+            imports: vec![
+                WasmImport {
+                    module_name: "sum".to_string(),
+                },
+                WasmImport {
+                    module_name: "div".to_string(),
+                },
+            ],
+            wasi: false,
+        };
+
+        let module = module_store.get("import").unwrap().clone();
+
+        let json = serde_json::to_string_pretty(&payload)?;
+        println!("{}", json);
+        let result = runtime.block_on(execute_function(&module, payload, module_store))?;
+        println!("{:#?}", result);
+        // std::fs::write("tests/data/sum_request.json", json)?;
+        // let result = &result[0].i32().unwrap();
+        // assert_eq!(*result, 20);
         Ok(())
     }
 }
