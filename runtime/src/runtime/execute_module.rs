@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use axum::{extract::Extension, http::StatusCode, Json};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
-use wasmer::{imports, Instance, Value};
+use wasmer::{imports, ImportObject, Instance, Module};
 use wasmer_wasi::{WasiEnv, WasiStateBuilder};
 
-use crate::{module_store::ModuleStore, ServerState};
+use crate::module_store::ModuleStore;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,8 +23,16 @@ pub struct WasmFunction {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExecuteModule {
+pub struct WasmImport {
+    pub symbol_name: String,
     pub module_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecuteModuleRequest {
+    pub module_name: String,
+    pub imports: Vec<WasmImport>,
     pub function: WasmFunction,
     pub wasi: bool,
 }
@@ -37,39 +44,14 @@ pub struct WasmResult {
     result_type: wasmer::ValType,
 }
 
-pub async fn execute_function(
-    Extension(state): Extension<ServerState>,
-    Json(payload): Json<ExecuteModule>,
-) -> Result<Json<Vec<WasmResult>>, (StatusCode, String)> {
-    let result = execute_function_inner(state.module_store.clone(), payload)
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, String::from(format!("{:?}", e))))?;
-
-    let result = result
-        .into_iter()
-        .map(|v| WasmResult {
-            result_type: v.ty(),
-            result: v.to_string(),
-        })
-        .collect::<Vec<_>>();
-
-    Ok(result.into())
-}
-
-async fn execute_function_inner(
-    module_store: Arc<Mutex<ModuleStore>>,
-    payload: ExecuteModule,
-) -> anyhow::Result<Box<[Value]>> {
-    let module_store = module_store.lock().await;
-
-    let module = module_store
-        .get(&payload.module_name)
-        .ok_or_else(|| anyhow::anyhow!("Module not found"))?;
-
+async fn execute_function(
+    module: &Module,
+    payload: ExecuteModuleRequest,
+) -> anyhow::Result<Box<[wasmer::Value]>> {
     let module_imports = if payload.wasi {
         let wasi_state = WasiStateBuilder::default().build()?;
         let mut wasi_env = WasiEnv::new(wasi_state);
-        let imports = wasi_env.import_object(module)?;
+        let imports = wasi_env.import_object(&module)?;
         imports
     } else {
         let imports = imports! {};
@@ -92,6 +74,35 @@ async fn execute_function_inner(
     Ok(fn_result)
 }
 
+async fn resolve_imports(
+    module: &Module,
+    payload: &ExecuteModuleRequest,
+    store: Arc<Mutex<ModuleStore>>,
+) -> anyhow::Result<ImportObject> {
+    let mut base_imports = if payload.wasi {
+        let wasi_state = WasiStateBuilder::default().build()?;
+        let mut wasi_env = WasiEnv::new(wasi_state);
+        let imports = wasi_env.import_object(&module)?;
+        imports
+    } else {
+        let imports = imports! {};
+        imports
+    };
+
+    let empty_imports = imports! {};
+
+    for meta in &payload.imports {
+        let store = store.lock();
+
+        if let Some(module) = store.get(&meta.module_name) {
+            let instance = Instance::new(&module, &empty_imports)?;
+            base_imports.register(&meta.module_name, instance.exports);
+        };
+    }
+
+    return Ok(base_imports);
+}
+
 fn parse_arg(arg: WasmArg) -> anyhow::Result<wasmer::Value> {
     Ok(match arg.arg_type {
         wasmer::ValType::I32 => wasmer::Value::I32(arg.value.parse()?),
@@ -111,10 +122,15 @@ mod tests {
     use tokio::sync::Mutex;
     use wasmer::Store;
 
-    use crate::{compile_wasm, module_store::ModuleStore};
+    use crate::{
+        compile_wasm,
+        module_store::ModuleStore,
+        runtime::execute_module::{execute_function, ExecuteModuleRequest, WasmArg, WasmFunction},
+    };
 
     static WASM_SUM: &[u8] = include_bytes!(r#"../../../binaries/compiled/sum.wasm"#);
-    use super::{execute_function_inner, ExecuteModule, WasmArg, WasmFunction};
+    static WASM_DIV: &[u8] = include_bytes!(r#"../../../binaries/compiled/div.wasm"#);
+    static WASM_IMPORT: &[u8] = include_bytes!(r#"../../../binaries/compiled/import.wasm"#);
 
     #[test]
     fn test_execute_function() -> anyhow::Result<()> {
@@ -123,10 +139,15 @@ mod tests {
         let mut module_store = ModuleStore::default();
         let wasm_store = Store::default();
         let wasm_add_one = compile_wasm(&wasm_store, WASM_SUM)?;
-        module_store.add("sum", wasm_add_one);
+        let wasm_div = compile_wasm(&wasm_store, WASM_DIV)?;
+        let wasm_import = compile_wasm(&wasm_store, WASM_IMPORT)?;
 
-        let module_store = Arc::new(Mutex::new(module_store));
-        let payload = ExecuteModule {
+        module_store.add("sum", wasm_add_one);
+        module_store.add("div", wasm_div);
+        module_store.add("import", wasm_import);
+
+        let module_store = module_store;
+        let payload = ExecuteModuleRequest {
             module_name: "sum".into(),
             function: WasmFunction {
                 name: "sum".into(),
@@ -141,12 +162,15 @@ mod tests {
                     },
                 ],
             },
+            imports: vec![],
             wasi: false,
         };
 
+        let module = module_store.get("sum").unwrap();
+
         let json = serde_json::to_string_pretty(&payload)?;
         println!("{}", json);
-        let result = runtime.block_on(execute_function_inner(module_store, payload))?;
+        let result = runtime.block_on(execute_function(module, payload))?;
         println!("{:#?}", result);
         std::fs::write("tests/data/sum_request.json", json)?;
         let result = &result[0].i32().unwrap();

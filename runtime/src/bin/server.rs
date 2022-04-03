@@ -4,7 +4,8 @@ use axum::{extract::Extension, routing::post, Router};
 use tokio::sync::Mutex;
 use wasmer::Store;
 use wasmfass::{
-    module_store::ModuleStore, routes::register_function::register_function_handler, ServerState,
+    module_store::ModuleStore, server::routes::register_function::register_function_handler,
+    ServerState,
 };
 
 #[tokio::main]

@@ -1,5 +1,6 @@
 {
   "moduleName": "sum",
+  "imports": [],
   "function": {
     "name": "sum",
     "args": [

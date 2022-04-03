@@ -7,7 +7,8 @@ use tokio::sync::Mutex;
 use wasmer::{Module, Store};
 
 pub mod module_store;
-pub mod routes;
+pub mod runtime;
+pub mod server;
 
 #[derive(Clone)]
 pub struct ServerState {
