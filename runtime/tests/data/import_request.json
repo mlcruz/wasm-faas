@@ -1,7 +1,12 @@
 {
-  "moduleName": "sum",
+  "moduleName": "import",
+  "imports": [
+    {
+      "moduleName": "sum"
+    }
+  ],
   "function": {
-    "name": "sum",
+    "name": "div_sum",
     "args": [
       {
         "value": "10",
@@ -12,5 +17,6 @@
         "argType": "I32"
       }
     ]
-  }
+  },
+  "wasi": false
 }

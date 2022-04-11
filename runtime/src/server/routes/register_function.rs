@@ -7,6 +7,7 @@ use crate::{compile_wasm, ServerState};
 pub struct RegisterFunction {
     name: String,
     data_base64: String,
+    wasi: bool,
 }
 
 pub async fn register_function_handler(
@@ -25,6 +26,8 @@ pub async fn register_function_handler(
 
     let mut module_store = state.module_store.lock().await;
 
-    module_store.add(payload.name, module);
+    module_store
+        .add(payload.name, module, payload.wasi)
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", err)))?;
     Ok("OK")
 }
