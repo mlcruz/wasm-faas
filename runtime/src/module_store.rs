@@ -34,8 +34,6 @@ impl ModulePackage {
                 let instance = Instance::new(module, imports)?;
                 let exports = instance.exports;
                 import_object.register(import.name(), exports);
-
-                //for ((namespace, name), export) in imported_module.z {}
             }
         }
 

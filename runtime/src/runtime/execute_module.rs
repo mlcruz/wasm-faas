@@ -1,14 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
-use parking_lot::Mutex;
+use crate::module_store::ModulePackage;
 use serde::{Deserialize, Serialize};
-use wasmer::{imports, ImportObject, Instance, Module};
-use wasmer_wasi::{WasiEnv, WasiStateBuilder};
-
-use crate::module_store::{ModulePackage, ModuleStore};
+use wasmer::Instance;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,11 +32,11 @@ pub struct ExecuteModuleRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WasmResult {
-    result: String,
-    result_type: wasmer::ValType,
+    pub result: String,
+    pub result_type: wasmer::ValType,
 }
 
-async fn execute_function(
+pub async fn execute_function(
     module: &ModulePackage,
     payload: ExecuteModuleRequest,
 ) -> anyhow::Result<Box<[wasmer::Value]>> {
