@@ -1,75 +1,77 @@
-use std::{
-    io::{BufRead, BufReader, Write},
-    net::{IpAddr, SocketAddr},
+use wasmfass::{
+    runtime::execute_module::ExecuteModuleRequest,
+    server::routes::register_function::RegisterFunction,
 };
-
-use wasmfass::{Command, ExecuteFunction, NamedFunction, WasmFunction};
 
 #[test]
 // don't forget to start the runtime before running those tests
 fn register_function_test() {
-    let function_data = std::fs::read("../binaries/bin/hello_world.wasm").unwrap();
-    let response = register_function(function_data);
+    let tokio_rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let function_data = std::fs::read("../binaries/compiled/sum.wasm").unwrap();
+    tokio_rt.block_on(async move {
+        let response = register_function("sum", function_data, false).await;
 
-    println!("{}", response);
-    assert_eq!("OK\n", response);
+        let response = response.error_for_status().unwrap().text().await.unwrap();
+        println!("{}", response);
+    });
 }
 
-fn register_function(function_data: Vec<u8>) -> String {
-    let base_64 = base64::encode(function_data);
-    let register_function_cmd = Command::RegisterFunction(NamedFunction {
+async fn register_function(name: &str, wasm: Vec<u8>, wasi: bool) -> reqwest::Response {
+    let base_64 = base64::encode(wasm);
+    let client = reqwest::Client::new();
+
+    let body = RegisterFunction {
         data_base64: base_64,
-        name: "hello_world".to_string(),
-    });
-    let mut serialized_cmd = base64::encode(
-        serde_json::to_string(&register_function_cmd)
-            .unwrap()
-            .as_bytes(),
-    );
-    serialized_cmd.push('\n');
-    let addr = SocketAddr::new(IpAddr::V4("0.0.0.0".parse().unwrap()), 9999);
-    let mut connection = std::net::TcpStream::connect(addr).unwrap();
-    connection.write(serialized_cmd.as_bytes()).unwrap();
-    connection.write("\n".as_bytes()).unwrap();
-    let mut response = String::new();
-    let mut reader = BufReader::new(connection);
-    reader.read_line(&mut response).unwrap();
-    response
+        name: name.to_owned(),
+        wasi,
+    };
+
+    let request = client
+        .post("http://127.0.0.1:3000/register")
+        .json(&body)
+        .build()
+        .unwrap();
+
+    client.execute(request).await.unwrap()
 }
 
 #[test]
 // don't forget to start the runtime before running those tests
-fn execute_function() {
-    let function_data = std::fs::read("../binaries/bin/hello_world.wasm").unwrap();
-    let response = register_function(function_data);
-    println!("{}", response);
-    assert_eq!("OK\n", response);
+fn execute_function_test() {
+    let tokio_rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let function_data = std::fs::read("../binaries/compiled/sum.wasm").unwrap();
+    let execute_payload = std::fs::read_to_string("tests/data/sum_request.json").unwrap();
+    println!("{:#?}", execute_payload);
+    let execute_payload: ExecuteModuleRequest = serde_json::from_str(&execute_payload).unwrap();
+    tokio_rt.block_on(async move {
+        register_function("sum", function_data, false)
+            .await
+            .error_for_status()
+            .unwrap();
 
-    let addr = SocketAddr::new(IpAddr::V4("0.0.0.0".parse().unwrap()), 9999);
+        let result = execute_function(execute_payload)
+            .await
+            .error_for_status()
+            .unwrap();
 
-    let mut connection = std::net::TcpStream::connect(addr).unwrap();
-
-    let execute_function_cmd = Command::ExecuteFunction(ExecuteFunction {
-        name: "hello_world".to_string(),
-        function: WasmFunction {
-            name: "main".to_string(),
-            args: vec![],
-        },
+        println!("{}", result.text().await.unwrap())
     });
+}
 
-    let serialized_cmd = base64::encode(
-        serde_json::to_string(&execute_function_cmd)
-            .unwrap()
-            .as_bytes(),
-    );
-    connection.write(serialized_cmd.as_bytes()).unwrap();
-    connection.write("\n".as_bytes()).unwrap();
-    connection.flush().unwrap();
+async fn execute_function(request: ExecuteModuleRequest) -> reqwest::Response {
+    let client = reqwest::Client::new();
 
-    let mut reader = BufReader::new(connection);
+    let request = client
+        .post("http://127.0.0.1:3000/exec")
+        .json(&request)
+        .build()
+        .unwrap();
 
-    let mut response = String::new();
-    reader.read_line(&mut response).unwrap();
-
-    assert_eq!("OK\n", response);
+    client.execute(request).await.unwrap()
 }

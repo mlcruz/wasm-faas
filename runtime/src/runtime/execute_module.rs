@@ -159,7 +159,7 @@ mod tests {
         println!("{}", json);
         let result = runtime.block_on(execute_function(&module, payload))?;
         println!("{:#?}", result);
-        // std::fs::write("tests/data/sum_request.json", json)?;
+        std::fs::write("tests/data/import_request.json", json)?;
         // let result = &result[0].i32().unwrap();
         // assert_eq!(*result, 20);
         Ok(())

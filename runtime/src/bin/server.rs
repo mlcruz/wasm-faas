@@ -4,7 +4,10 @@ use axum::{extract::Extension, routing::post, Router};
 use tokio::sync::Mutex;
 use wasmer::Store;
 use wasmfass::{
-    module_store::ModuleStore, server::routes::register_function::register_function_handler,
+    module_store::ModuleStore,
+    server::routes::{
+        execute_function::execute_function_handler, register_function::register_function_handler,
+    },
     ServerState,
 };
 
@@ -25,7 +28,8 @@ async fn main() {
     };
 
     let app = Router::new()
-        .route("/", post(register_function_handler))
+        .route("/register", post(register_function_handler))
+        .route("/exec", post(execute_function_handler))
         .layer(Extension(server_state));
 
     axum::Server::bind(&addr)

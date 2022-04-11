@@ -5,9 +5,9 @@ use crate::{compile_wasm, ServerState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterFunction {
-    name: String,
-    data_base64: String,
-    wasi: bool,
+    pub name: String,
+    pub data_base64: String,
+    pub wasi: bool,
 }
 
 pub async fn register_function_handler(
