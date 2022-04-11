@@ -3,6 +3,9 @@
     "emscripten.h": "c",
     "em_macros.h": "c",
     "em_types.h": "c",
-    "em_asm.h": "c"
+    "em_asm.h": "c",
+    "regex": "cpp",
+    "sstream": "cpp",
+    "strstream": "cpp"
   }
 }

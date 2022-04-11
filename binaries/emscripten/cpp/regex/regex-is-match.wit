@@ -1,0 +1,1 @@
+regex-is-match: function(text: string, pattern: string) -> bool
