@@ -8,6 +8,7 @@ use wasmer::{Module, Store};
 pub mod module_store;
 pub mod runtime;
 pub mod server;
+pub mod sim_compat;
 
 #[derive(Clone)]
 pub struct ServerState {

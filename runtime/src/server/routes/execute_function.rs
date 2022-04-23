@@ -9,6 +9,7 @@ pub async fn execute_function_handler(
     Extension(state): Extension<ServerState>,
     Json(payload): Json<ExecuteModuleRequest>,
 ) -> Result<Json<Vec<WasmResult>>, (StatusCode, String)> {
+    println!("{:#?}", payload);
     let module_store = state.module_store.lock().await;
     let module_package = module_store
         .get(&payload.module_name)
@@ -25,6 +26,8 @@ pub async fn execute_function_handler(
             result: v.to_string(),
         })
         .collect::<Vec<_>>();
+
+    println!("{:#?}", result);
 
     Ok(result.into())
 }

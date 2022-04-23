@@ -1,4 +1,4 @@
-use wasmfass::{
+use wasmfaas::{
     runtime::execute_module::ExecuteModuleRequest,
     server::routes::register_function::RegisterFunction,
 };
