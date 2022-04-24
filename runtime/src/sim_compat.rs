@@ -44,12 +44,12 @@ impl From<ArgType> for wasmer::Type {
 }
 
 use crate::{
-    compile_wasm, module_store::ModuleStore, runtime::execute_module::ExecuteModuleRequest,
+    compile_wasm, module_store::ModuleStore,
     server::routes::register_function::RegisterModulePayload,
 };
 
 #[repr(C)]
-pub enum ModuleList {
+pub enum StaticModuleList {
     WasmDiv,
     WasmSum,
 }
@@ -97,26 +97,19 @@ impl From<WasmFunction> for crate::runtime::execute_module::WasmFunction {
 static WASM_SUM: &[u8] = include_bytes!(r#"../../binaries/compiled/sum.wasm"#);
 static WASM_DIV: &[u8] = include_bytes!(r#"../../binaries/compiled/div.wasm"#);
 
-impl ModuleList {
-    fn build_registration_payload(&self) -> RegisterModulePayload {
+impl StaticModuleList {
+    fn data_base64(&self) -> String {
         let data = match self {
-            ModuleList::WasmDiv => WASM_DIV,
-            ModuleList::WasmSum => WASM_SUM,
+            StaticModuleList::WasmDiv => WASM_DIV,
+            StaticModuleList::WasmSum => WASM_SUM,
         };
-
-        let base64 = base64::encode(data);
-
-        RegisterModulePayload {
-            name: "sum".into(),
-            data_base64: base64,
-            wasi: false,
-        }
+        base64::encode(data)
     }
 
     fn name(&self) -> &'static str {
         match self {
-            ModuleList::WasmDiv => "div",
-            ModuleList::WasmSum => "sum",
+            StaticModuleList::WasmDiv => "div",
+            StaticModuleList::WasmSum => "sum",
         }
     }
 }
@@ -146,12 +139,63 @@ pub extern "C" fn initialize_runtime() -> u64 {
 }
 
 #[no_mangle]
-pub extern "C" fn register_module(runtime_id: u64, module: ModuleList) -> *const c_char {
+pub extern "C" fn get_static_module_data(module: StaticModuleList) -> *mut c_char {
+    let base_64 = module.data_base64().as_bytes().to_vec();
+    let base64_compat: CString = CString::new(base_64).unwrap();
+
+    base64_compat.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn get_runtime_module_base64_data(
+    runtime_id: u64,
+    module: StaticModuleList,
+) -> *const c_char {
     // println!("registering {}", runtime_id);
 
-    let module_payload = module.build_registration_payload();
-    let module_name_compat = module.name().as_bytes().to_vec();
-    let module_name_compat: CString = CString::new(module_name_compat).unwrap();
+    let runtime_lock = SHARED_RUNTIMES
+        .read()
+        .expect("failed to get runtime read lock");
+
+    let runtime = runtime_lock
+        .get(&runtime_id)
+        .expect("failed to get runtime id");
+
+    let lock = runtime.lock();
+
+    let contains_module = lock.module_store.contains_key(&module.name());
+
+    if !contains_module {
+        panic!("Missing module base64");
+    }
+
+    let base_64 = module.data_base64().as_bytes().to_vec();
+    let base64_compat: CString = CString::new(base_64).unwrap();
+
+    base64_compat.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn register_module(
+    runtime_id: u64,
+    module_name: *const c_char,
+    module_data_base_64: *const c_char,
+) -> *const c_char {
+    // println!("registering {}", runtime_id);
+
+    let module_name_str = unsafe { CStr::from_ptr(module_name) }
+        .to_str()
+        .expect("invalid string");
+
+    let module_name_data = unsafe { CStr::from_ptr(module_data_base_64) }
+        .to_str()
+        .expect("invalid data base 64");
+
+    let module_payload = RegisterModulePayload {
+        data_base64: module_name_data.to_string(),
+        name: module_name_str.to_string(),
+        wasi: false,
+    };
 
     let data = base64::decode(module_payload.data_base64).expect("failed to decode module");
 
@@ -171,7 +215,7 @@ pub extern "C" fn register_module(runtime_id: u64, module: ModuleList) -> *const
         .add(module_payload.name, module, module_payload.wasi)
         .expect("failed to add module to store");
 
-    module_name_compat.into_raw()
+    module_name
 }
 
 #[no_mangle]
@@ -180,14 +224,37 @@ pub extern "C" fn free_ffi_string(data: *mut c_char) {
 }
 
 #[no_mangle]
+pub extern "C" fn is_module_registered(runtime_id: u64, module: StaticModuleList) -> bool {
+    // println!("executing {:#?}", function);
+
+    let runtime_lock = SHARED_RUNTIMES
+        .read()
+        .expect("failed to get runtime read lock");
+
+    let runtime = runtime_lock
+        .get(&runtime_id)
+        .expect("failed to get runtime id");
+
+    let lock = runtime.lock();
+
+    lock.module_store.contains_key(module.name())
+}
+
+#[no_mangle]
 pub extern "C" fn execute_module(
     runtime_id: u64,
-    module: ModuleList,
+    module_name: *const c_char,
     function: WasmFunction,
 ) -> i32 {
     // println!("executing {:#?}", function);
 
-    let module_name = module.name().to_string();
+    let module_name = unsafe { CStr::from_ptr(module_name) }
+        .to_str()
+        .expect("invalid string");
+
+    let func_name = unsafe { CStr::from_ptr(function.name) }
+        .to_str()
+        .expect("invalid string");
 
     let runtime_lock = SHARED_RUNTIMES
         .read()
@@ -201,41 +268,32 @@ pub extern "C" fn execute_module(
 
     let module = lock.module_store.get(&module_name).expect("missing module");
 
-    let execute_module_request = ExecuteModuleRequest {
-        module_name,
-        function: function.into(),
-    };
-
     let instance = Instance::new(&module.module, &module.imports).unwrap();
 
-    let wasm_function = instance
-        .exports
-        .get_function(&execute_module_request.function.name)
-        .unwrap();
+    let wasm_function = instance.exports.get_function(func_name).unwrap();
 
-    let args = &execute_module_request
-        .function
-        .args
-        .into_iter()
-        .map(parse_arg)
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+    let args = [
+        parse_arg(&function.args[0]).unwrap(),
+        parse_arg(&function.args[1]).unwrap(),
+    ];
 
-    let fn_result = wasm_function.call(args).unwrap();
+    let fn_result = wasm_function.call(&args).unwrap();
 
     let result = fn_result[0].i32().unwrap();
 
     result
 }
 
-fn parse_arg(arg: crate::runtime::execute_module::WasmArg) -> anyhow::Result<wasmer::Value> {
+fn parse_arg(arg: &WasmArg) -> anyhow::Result<wasmer::Value> {
+    let value = unsafe { CStr::from_ptr(arg.value).to_str()? };
+
     Ok(match arg.arg_type {
-        wasmer::ValType::I32 => wasmer::Value::I32(arg.value.parse()?),
-        wasmer::ValType::I64 => wasmer::Value::I64(arg.value.parse()?),
-        wasmer::ValType::F32 => wasmer::Value::F32(arg.value.parse()?),
-        wasmer::ValType::F64 => wasmer::Value::F64(arg.value.parse()?),
-        wasmer::ValType::V128 => todo!(),
-        wasmer::ValType::ExternRef => todo!(),
-        wasmer::ValType::FuncRef => todo!(),
+        ArgType::I32 => wasmer::Value::I32(value.parse()?),
+        ArgType::I64 => wasmer::Value::I64(value.parse()?),
+        ArgType::F32 => wasmer::Value::F32(value.parse()?),
+        ArgType::F64 => wasmer::Value::F64(value.parse()?),
+        ArgType::V128 => todo!(),
+        ArgType::ExternRef => todo!(),
+        ArgType::FuncRef => todo!(),
     })
 }

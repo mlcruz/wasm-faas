@@ -66,4 +66,8 @@ impl ModuleStore {
     pub fn get(&self, name: &str) -> Option<&ModulePackage> {
         self.store.get(name)
     }
+
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.store.contains_key(name)
+    }
 }

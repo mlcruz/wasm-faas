@@ -21,7 +21,7 @@ enum class ArgType {
   FuncRef,
 };
 
-enum class ModuleList {
+enum class StaticModuleList {
   WasmDiv,
   WasmSum,
 };
@@ -40,10 +40,18 @@ extern "C" {
 
 uint64_t initialize_runtime();
 
-const char *register_module(uint64_t runtime_id, ModuleList module);
+char *get_static_module_data(StaticModuleList module);
+
+const char *get_runtime_module_base64_data(uint64_t runtime_id, StaticModuleList module);
+
+const char *register_module(uint64_t runtime_id,
+                            const char *module_name,
+                            const char *module_data_base_64);
 
 void free_ffi_string(char *data);
 
-int32_t execute_module(uint64_t runtime_id, ModuleList module, WasmFunction function);
+bool is_module_registered(uint64_t runtime_id, StaticModuleList module);
+
+int32_t execute_module(uint64_t runtime_id, const char *module_name, WasmFunction function);
 
 } // extern "C"
