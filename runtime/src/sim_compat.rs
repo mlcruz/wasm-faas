@@ -1,4 +1,8 @@
-use std::{collections::HashMap, ffi::CStr, os::raw::c_char};
+use std::{
+    collections::HashMap,
+    ffi::{CStr, CString},
+    os::raw::c_char,
+};
 
 use crossbeam::sync::ShardedLock;
 use once_cell::sync::Lazy;
@@ -7,6 +11,7 @@ use rand::Rng;
 use wasmer::{Instance, Store};
 
 #[repr(C)]
+#[derive(Debug)]
 pub enum ArgType {
     /// Signed 32 bit integer.
     I32,
@@ -50,12 +55,14 @@ pub enum ModuleList {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct WasmArg {
     pub value: *const c_char,
     pub arg_type: ArgType,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct WasmFunction {
     pub name: *const c_char,
     pub args: [WasmArg; 2],
@@ -139,10 +146,12 @@ pub extern "C" fn initialize_runtime() -> u64 {
 }
 
 #[no_mangle]
-pub extern "C" fn register_module(runtime_id: u64, module: ModuleList) {
-    println!("registering {}", runtime_id);
+pub extern "C" fn register_module(runtime_id: u64, module: ModuleList) -> *const c_char {
+    // println!("registering {}", runtime_id);
 
     let module_payload = module.build_registration_payload();
+    let module_name_compat = module.name().as_bytes().to_vec();
+    let module_name_compat: CString = CString::new(module_name_compat).unwrap();
 
     let data = base64::decode(module_payload.data_base64).expect("failed to decode module");
 
@@ -161,6 +170,13 @@ pub extern "C" fn register_module(runtime_id: u64, module: ModuleList) {
     lock.module_store
         .add(module_payload.name, module, module_payload.wasi)
         .expect("failed to add module to store");
+
+    module_name_compat.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn free_ffi_string(data: *mut c_char) {
+    unsafe { CString::from_raw(data) };
 }
 
 #[no_mangle]
@@ -169,7 +185,7 @@ pub extern "C" fn execute_module(
     module: ModuleList,
     function: WasmFunction,
 ) -> i32 {
-    println!("registering {}", runtime_id);
+    // println!("executing {:#?}", function);
 
     let module_name = module.name().to_string();
 

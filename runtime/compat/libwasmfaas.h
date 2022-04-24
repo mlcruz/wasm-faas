@@ -40,8 +40,10 @@ extern "C" {
 
 uint64_t initialize_runtime();
 
-void register_module(uint64_t runtime_id, ModuleList module);
+const char *register_module(uint64_t runtime_id, ModuleList module);
 
-void execute_module(uint64_t runtime_id, ModuleList module, WasmFunction function);
+void free_ffi_string(char *data);
+
+int32_t execute_module(uint64_t runtime_id, ModuleList module, WasmFunction function);
 
 } // extern "C"
