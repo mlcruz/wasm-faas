@@ -1,6 +1,6 @@
 use wasmfaas::{
     runtime::execute_module::ExecuteModuleRequest,
-    server::routes::register_function::RegisterFunction,
+    server::routes::register_function::RegisterModulePayload,
 };
 
 #[test]
@@ -23,7 +23,7 @@ async fn register_function(name: &str, wasm: Vec<u8>, wasi: bool) -> reqwest::Re
     let base_64 = base64::encode(wasm);
     let client = reqwest::Client::new();
 
-    let body = RegisterFunction {
+    let body = RegisterModulePayload {
         data_base64: base_64,
         name: name.to_owned(),
         wasi,

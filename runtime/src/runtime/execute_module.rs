@@ -2,7 +2,7 @@ use crate::module_store::ModulePackage;
 use serde::{Deserialize, Serialize};
 use wasmer::Instance;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WasmArg {
     pub value: String,

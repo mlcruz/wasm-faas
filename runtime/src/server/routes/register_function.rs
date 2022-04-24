@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::{compile_wasm, ServerState};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RegisterFunction {
+pub struct RegisterModulePayload {
     pub name: String,
     pub data_base64: String,
     pub wasi: bool,
@@ -12,7 +12,7 @@ pub struct RegisterFunction {
 
 pub async fn register_function_handler(
     Extension(state): Extension<ServerState>,
-    Json(payload): Json<RegisterFunction>,
+    Json(payload): Json<RegisterModulePayload>,
 ) -> Result<&'static str, (StatusCode, String)> {
     let data = base64::decode(payload.data_base64).map_err(|_| {
         (
