@@ -224,9 +224,12 @@ pub extern "C" fn free_ffi_string(data: *mut c_char) {
 }
 
 #[no_mangle]
-pub extern "C" fn is_module_registered(runtime_id: u64, module: StaticModuleList) -> bool {
+pub extern "C" fn is_module_registered(runtime_id: u64, module_name: *const c_char) -> bool {
     // println!("executing {:#?}", function);
 
+    let module_name = unsafe { CStr::from_ptr(module_name) }
+        .to_str()
+        .expect("invalid string");
     let runtime_lock = SHARED_RUNTIMES
         .read()
         .expect("failed to get runtime read lock");
@@ -237,7 +240,7 @@ pub extern "C" fn is_module_registered(runtime_id: u64, module: StaticModuleList
 
     let lock = runtime.lock();
 
-    lock.module_store.contains_key(module.name())
+    lock.module_store.contains_key(module_name)
 }
 
 #[no_mangle]

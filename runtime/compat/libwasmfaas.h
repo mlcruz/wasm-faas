@@ -50,7 +50,7 @@ const char *register_module(uint64_t runtime_id,
 
 void free_ffi_string(char *data);
 
-bool is_module_registered(uint64_t runtime_id, StaticModuleList module);
+bool is_module_registered(uint64_t runtime_id, const char *module_name);
 
 int32_t execute_module(uint64_t runtime_id, const char *module_name, WasmFunction function);
 
