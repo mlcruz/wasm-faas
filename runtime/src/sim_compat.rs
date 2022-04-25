@@ -106,11 +106,14 @@ impl StaticModuleList {
         base64::encode(data)
     }
 
-    fn name(&self) -> &'static str {
-        match self {
-            StaticModuleList::WasmDiv => "div",
-            StaticModuleList::WasmSum => "sum",
-        }
+    fn data_from_str(name: &str) -> String {
+        let data = match name {
+            "div" => WASM_DIV,
+            "sum" => WASM_SUM,
+            _ => panic!("Unknown module name"),
+        };
+
+        base64::encode(data)
     }
 }
 
@@ -149,9 +152,13 @@ pub extern "C" fn get_static_module_data(module: StaticModuleList) -> *mut c_cha
 #[no_mangle]
 pub extern "C" fn get_runtime_module_base64_data(
     runtime_id: u64,
-    module: StaticModuleList,
+    module_name: *const c_char,
 ) -> *const c_char {
     // println!("registering {}", runtime_id);
+
+    let module_name_str = unsafe { CStr::from_ptr(module_name) }
+        .to_str()
+        .expect("invalid string");
 
     let runtime_lock = SHARED_RUNTIMES
         .read()
@@ -163,13 +170,14 @@ pub extern "C" fn get_runtime_module_base64_data(
 
     let lock = runtime.lock();
 
-    let contains_module = lock.module_store.contains_key(&module.name());
+    let contains_module = lock.module_store.contains_key(module_name_str);
 
     if !contains_module {
         panic!("Missing module base64");
     }
 
-    let base_64 = module.data_base64().as_bytes().to_vec();
+    let base_64 = StaticModuleList::data_from_str(module_name_str);
+    // module.data_base64().as_bytes().to_vec();
     let base64_compat: CString = CString::new(base_64).unwrap();
 
     base64_compat.into_raw()

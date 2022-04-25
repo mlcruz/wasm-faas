@@ -42,7 +42,7 @@ uint64_t initialize_runtime();
 
 char *get_static_module_data(StaticModuleList module);
 
-const char *get_runtime_module_base64_data(uint64_t runtime_id, StaticModuleList module);
+const char *get_runtime_module_base64_data(uint64_t runtime_id, const char *module_name);
 
 const char *register_module(uint64_t runtime_id,
                             const char *module_name,
